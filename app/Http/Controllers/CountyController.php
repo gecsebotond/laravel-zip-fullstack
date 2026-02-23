@@ -3,28 +3,94 @@
 namespace App\Http\Controllers;
 
 use App\Models\County;
+use App\Models\Place;
 use Illuminate\Http\Request;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class CountyController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $counties = County::with('places')->get();
+        $counties = County::all();
+        $selectedCountyId = $request->query('county_id');
+        $selectedInitial = $request->query('initial');
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $counties
-        ]);
+        $places = collect();
+        $initials = collect();
+
+        if ($selectedCountyId) {
+            $initials = Place::where('county_id', $selectedCountyId)
+                ->selectRaw('UPPER(LEFT(name, 1)) as initial')
+                ->distinct()
+                ->orderBy('initial')
+                ->pluck('initial');
+
+            $query = Place::where('county_id', $selectedCountyId);
+            if ($selectedInitial) {
+                $query->whereRaw('UPPER(LEFT(name, 1)) = ?', [$selectedInitial]);
+            }
+            $places = $query->orderBy('name')->get();
+        }
+
+        return view('counties', compact('counties', 'selectedCountyId', 'selectedInitial', 'initials', 'places'));
     }
 
-    public function show($id)
+    public function downloadCsv(Request $request, County $county)
     {
-        $county = County::with('places')->findOrFail($id);
+        $initial = $request->query('initial');
+        
+        $query = $county->places();
+        if ($initial) {
+            $query->whereRaw('UPPER(LEFT(name, 1)) = ?', [$initial]);
+        }
+        $places = $query->orderBy('name')->get();
 
-        return response()->json([
-            'status' => 'success',
-            'data' => $county
-        ]);
+        $csvFile = fopen('php://memory', 'w');
+        
+        fputcsv($csvFile, ['county_id', 'county_name', 'place_id', 'place_name', 'postal_code'], ";");
+
+        if ($places->isEmpty()) {
+            fputcsv($csvFile, [$county->id, $county->name, '', '', ''], ";");
+        } else {
+            foreach ($places as $place) {
+                fputcsv($csvFile, [
+                    $county->id,
+                    $county->name,
+                    $place->id,
+                    $place->name,
+                    $place->postal_code
+                ], ";");
+            }
+        }
+
+        rewind($csvFile);
+        $csvData = stream_get_contents($csvFile);
+        fclose($csvFile);
+
+        $csvData = "\xEF\xBB\xBF" . $csvData;
+
+        return response($csvData, 200)
+            ->header('Content-Type', 'text/csv; charset=UTF-8')
+            ->header('Content-Disposition', 'attachment; filename="county_'.$county->id.'.csv"');
+    }
+
+    public function downloadPdf(Request $request, County $county)
+    {
+        $initial = $request->query('initial');
+        
+        $query = $county->places();
+        if ($initial) {
+            $query->whereRaw('UPPER(LEFT(name, 1)) = ?', [$initial]);
+        }
+        
+        $data = [
+            'county' => $county,
+            'places' => $query->orderBy('name')->get()
+        ];
+
+        $pdf = Pdf::loadView('pdf.countypdf', $data)->setPaper('a4', 'portrait');
+
+        return $pdf->download('county_' . $county->id . '.pdf');
     }
 
     public function store(Request $request)
@@ -33,15 +99,11 @@ class CountyController extends Controller
             'name' => 'required|string|unique:counties,name',
         ]);
 
-        $county = County::create([
+        County::create([
             'name' => $request->name,
         ]);
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'County created successfully',
-            'data' => $county
-        ], 201);
+        return redirect()->back()->with('success', 'Megye sikeresen létrehozva!');
     }
 
     public function update(Request $request, $id)
@@ -56,11 +118,7 @@ class CountyController extends Controller
             'name' => $request->name,
         ]);
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'County updated successfully',
-            'data' => $county
-        ]);
+        return redirect()->back()->with('success', 'Megye sikeresen frissítve!');
     }
 
     public function destroy($id)
@@ -68,9 +126,6 @@ class CountyController extends Controller
         $county = County::findOrFail($id);
         $county->delete();
 
-        return response()->json([
-            'status' => 'success',
-            'message' => 'County deleted successfully'
-        ], 204);
+        return redirect()->route('counties.index')->with('success', 'Megye sikeresen törölve!');
     }
 }
