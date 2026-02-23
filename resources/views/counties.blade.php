@@ -67,11 +67,11 @@
     </div>
 
     <div class="card">
-        <form action="{{ route('counties.index') }}" method="GET" style="display: flex; gap: 15px; align-items: flex-end;">
-            <div class="form-group" style="margin: 0; max-width: 300px;">
-                <label>Válassz egy megyét:</label>
+        <form action="{{ route('counties.index') }}" method="GET" style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
+            <div class="form-group" style="margin: 0; min-width: 250px;">
+                <label>Megye</label>
                 <select name="county_id" onchange="this.form.submit()">
-                    <option value="">-- Válassz egy megyét --</option>
+                    <option value="">-- Minden megye (keresés) --</option>
                     @foreach($counties as $county)
                         <option value="{{ $county->id }}" {{ $selectedCountyId == $county->id ? 'selected' : '' }}>
                             {{ $county->name }}
@@ -79,44 +79,60 @@
                     @endforeach
                 </select>
             </div>
+            
+            <div class="form-group" style="margin: 0; flex-grow: 1; max-width: 400px;">
+                <label>Keresés (Irányítószám vagy Település):</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" name="search" value="{{ $searchQuery ?? '' }}" placeholder="pl. 1011 vagy Budapest" style="flex-grow: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                    <button type="submit" class="btn-success">Keresés</button>
+                </div>
+            </div>
+
             @if($selectedInitial)
                 <input type="hidden" name="initial" value="{{ $selectedInitial }}">
             @endif
         </form>
     </div>
 
-    @if($selectedCountyId)
+    @if($selectedCountyId || $searchQuery)
         <div class="card">
-            <h3>Szűrés kezdőbetű alapján</h3>
-            <div class="initials-list">
-                <a href="{{ route('counties.index', ['county_id' => $selectedCountyId]) }}" class="{{ !$selectedInitial ? 'active' : '' }}">Összes</a>
-                @foreach($initials as $initial)
-                    <a href="{{ route('counties.index', ['county_id' => $selectedCountyId, 'initial' => $initial]) }}" class="{{ $selectedInitial == $initial ? 'active' : '' }}">
-                        {{ $initial }}
-                    </a>
-                @endforeach
-            </div>
+            
+            @if($selectedCountyId)
+                <h3>Szűrés kezdőbetű alapján</h3>
+                <div class="initials-list">
+                    <a href="{{ route('counties.index', ['county_id' => $selectedCountyId, 'search' => $searchQuery]) }}" class="{{ !$selectedInitial ? 'active' : '' }}">Összes</a>
+                    @foreach($initials as $initial)
+                        <a href="{{ route('counties.index', ['county_id' => $selectedCountyId, 'initial' => $initial, 'search' => $searchQuery]) }}" class="{{ $selectedInitial == $initial ? 'active' : '' }}">
+                            {{ $initial }}
+                        </a>
+                    @endforeach
+                </div>
+            @else
+                <h3>Globális keresési eredmények: "{{ $searchQuery }}"</h3>
+            @endif
 
             <div class="action-bar">
                 <h4 style="margin: 0;">Települések listája</h4>
                 <div style="display: flex; gap: 10px;">
-                    <a href="{{ route('counties.downloadCsv', ['county' => $selectedCountyId, 'initial' => $selectedInitial]) }}" class="btn-link btn-secondary">CSV Letöltése</a>
-                    <a href="{{ route('counties.downloadPdf', ['county' => $selectedCountyId, 'initial' => $selectedInitial]) }}" class="btn-link" style="background-color: #e67e22;">PDF Letöltése</a>
-                    
-                    @auth
-                        <a href="{{ route('counties.emailPdf', ['county' => $selectedCountyId, 'initial' => $selectedInitial]) }}" class="btn-link" style="background-color: #8e44ad;">E-mail Küldése</a>
+                    @if($selectedCountyId)
+                        <a href="{{ route('counties.downloadCsv', ['county' => $selectedCountyId, 'initial' => $selectedInitial]) }}" class="btn-link btn-secondary">CSV Letöltése</a>
+                        <a href="{{ route('counties.downloadPdf', ['county' => $selectedCountyId, 'initial' => $selectedInitial]) }}" class="btn-link" style="background-color: #e67e22;">PDF Letöltése</a>
                         
-                        <button type="button" class="btn-success" onclick="openModal()">+ Új település hozzáadása</button>
-                    @endauth
+                        @auth
+                            <a href="{{ route('counties.emailPdf', ['county' => $selectedCountyId, 'initial' => $selectedInitial]) }}" class="btn-link" style="background-color: #8e44ad;">E-mail Küldése</a>
+                            <button type="button" class="btn-success" onclick="openModal()">+ Új település hozzáadása</button>
+                        @endauth
+                    @endif
                 </div>
             </div>
 
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 150px;">Irányítószám</th>
+                        <th style="width: 120px;">Irányítószám</th>
                         <th>Település</th>
-                        @auth <th style="width: 200px;">Műveletek</th> @endauth
+                        <th>Megye</th>
+                        @auth <th style="width: 150px;">Műveletek</th> @endauth
                     </tr>
                 </thead>
                 <tbody>
@@ -125,6 +141,7 @@
                             @guest
                                 <td>{{ $place->postal_code }}</td>
                                 <td>{{ $place->name }}</td>
+                                <td>{{ $place->county->name ?? 'Ismeretlen' }}</td>
                             @endguest
                             
                             @auth
@@ -132,10 +149,13 @@
                                     <form id="edit-{{ $place->id }}" action="{{ route('places.update', $place) }}" method="POST">
                                         @csrf @method('PUT')
                                     </form>
-                                    <input type="text" name="postal_code" value="{{ $place->postal_code }}" form="edit-{{ $place->id }}" required style="width: 100px; padding: 5px;">
+                                    <input type="text" name="postal_code" value="{{ $place->postal_code }}" form="edit-{{ $place->id }}" required style="width: 80px; padding: 5px;">
                                 </td>
                                 <td>
                                     <input type="text" name="name" value="{{ $place->name }}" form="edit-{{ $place->id }}" required style="width: 100%; padding: 5px;">
+                                </td>
+                                <td>
+                                    {{ $place->county->name ?? 'Ismeretlen' }}
                                 </td>
                                 <td class="action-flex">
                                     <button type="submit" form="edit-{{ $place->id }}">Mentés</button>
@@ -148,15 +168,11 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="3">Nincs város a megadott szűrökkel.</td>
+                            <td colspan="4">Nincs találat a megadott szűrőkkel.</td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
-        </div>
-    @else
-        <div class="card">
-            <p>Válassz egy megyét a listából</p>
         </div>
     @endif
 

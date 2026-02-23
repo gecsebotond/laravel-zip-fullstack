@@ -17,10 +17,12 @@ class CountyController extends Controller
         $counties = County::all();
         $selectedCountyId = $request->query('county_id');
         $selectedInitial = $request->query('initial');
+        $searchQuery = $request->query('search');
 
         $places = collect();
         $initials = collect();
 
+        // Ha van kiválasztott megye
         if ($selectedCountyId) {
             $initials = Place::where('county_id', $selectedCountyId)
                 ->selectRaw('UPPER(LEFT(name, 1)) as initial')
@@ -28,14 +30,32 @@ class CountyController extends Controller
                 ->orderBy('initial')
                 ->pluck('initial');
 
-            $query = Place::where('county_id', $selectedCountyId);
+            // Betöltjük a megyét is (with('county')) a táblázat miatt
+            $query = Place::with('county')->where('county_id', $selectedCountyId);
+            
             if ($selectedInitial) {
                 $query->whereRaw('UPPER(LEFT(name, 1)) = ?', [$selectedInitial]);
             }
+
+            if ($searchQuery) {
+                $query->where(function($q) use ($searchQuery) {
+                    $q->where('name', 'LIKE', '%' . $searchQuery . '%')
+                      ->orWhere('postal_code', 'LIKE', '%' . $searchQuery . '%');
+                });
+            }
+
             $places = $query->orderBy('name')->get();
+        } 
+        // Ha NINCS kiválasztott megye, de VAN keresőszó (Globális keresés)
+        elseif ($searchQuery) {
+            $places = Place::with('county')
+                ->where('name', 'LIKE', '%' . $searchQuery . '%')
+                ->orWhere('postal_code', 'LIKE', '%' . $searchQuery . '%')
+                ->orderBy('name')
+                ->get();
         }
 
-        return view('counties', compact('counties', 'selectedCountyId', 'selectedInitial', 'initials', 'places'));
+        return view('counties', compact('counties', 'selectedCountyId', 'selectedInitial', 'initials', 'places', 'searchQuery'));
     }
 
     public function downloadCsv(Request $request, County $county)
