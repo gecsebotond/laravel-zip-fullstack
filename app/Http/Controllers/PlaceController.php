@@ -16,6 +16,10 @@ class PlaceController extends Controller
     {
         return Place::with('county')->findOrFail($id);
     }
+    public function __construct()
+    {
+        $this->middleware('auth');
+    }
 
     public function store(Request $request)
     {
