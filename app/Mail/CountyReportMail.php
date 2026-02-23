@@ -2,9 +2,10 @@
 
 namespace App\Mail;
 
+use App\Models\County;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -13,41 +14,34 @@ class CountyReportMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    /**
-     * Create a new message instance.
-     */
-    public function __construct()
+    public $county;
+    public $pdfContent;
+
+    public function __construct(County $county, $pdfContent)
     {
-        //
+        $this->county = $county;
+        $this->pdfContent = $pdfContent;
     }
 
-    /**
-     * Get the message envelope.
-     */
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'County Report Mail',
+            subject: $this->county->name . ' Megye Jelentés',
         );
     }
 
-    /**
-     * Get the message content definition.
-     */
     public function content(): Content
     {
         return new Content(
-            view: 'view.name',
+            view: 'emails.county_report',
         );
     }
 
-    /**
-     * Get the attachments for the message.
-     *
-     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
-     */
     public function attachments(): array
     {
-        return [];
+        return [
+            Attachment::fromData(fn () => $this->pdfContent, 'county_' . $this->county->id . '.pdf')
+                ->withMime('application/pdf'),
+        ];
     }
 }

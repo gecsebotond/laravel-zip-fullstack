@@ -39,6 +39,11 @@
 <body>
 
     <div class="header">
+        @if(session('success'))
+            <div style="background-color: #d4edda; color: #155724; padding: 15px; border-radius: 4px; margin-bottom: 20px; border: 1px solid #c3e6cb;">
+                {{ session('success') }}
+            </div>
+        @endif
         <h1>Magyar Postai Címjegyzék</h1>
         <div>
             @guest
@@ -99,6 +104,8 @@
                     <a href="{{ route('counties.downloadPdf', ['county' => $selectedCountyId, 'initial' => $selectedInitial]) }}" class="btn-link" style="background-color: #e67e22;">PDF Letöltése</a>
                     
                     @auth
+                        <a href="{{ route('counties.emailPdf', ['county' => $selectedCountyId, 'initial' => $selectedInitial]) }}" class="btn-link" style="background-color: #8e44ad;">E-mail Küldése</a>
+                        
                         <button type="button" class="btn-success" onclick="openModal()">+ Új település hozzáadása</button>
                     @endauth
                 </div>

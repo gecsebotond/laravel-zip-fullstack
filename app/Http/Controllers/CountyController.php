@@ -6,6 +6,9 @@ use App\Models\County;
 use App\Models\Place;
 use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Mail\CountyReportMail;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Auth;
 
 class CountyController extends Controller
 {
@@ -127,5 +130,24 @@ class CountyController extends Controller
         $county->delete();
 
         return redirect()->route('counties.index')->with('success', 'Megye sikeresen törölve!');
+    }
+    public function sendPdfEmail(Request $request, County $county)
+    {
+        $initial = $request->query('initial');
+        
+        $query = $county->places();
+        if ($initial) {
+            $query->whereRaw('UPPER(LEFT(name, 1)) = ?', [$initial]);
+        }
+        
+        $data = [
+            'county' => $county,
+            'places' => $query->orderBy('name')->get()
+        ];
+        $pdf = Pdf::loadView('pdf.countypdf', $data)->setPaper('a4', 'portrait');
+
+        Mail::to(Auth::user()->email)->send(new CountyReportMail($county, $pdf->output()));
+
+        return redirect()->back()->with('success', 'A PDF sikeresen elküldve az email címedre!');
     }
 }

@@ -64,4 +64,5 @@ Route::middleware('auth')->group(function () {
         $place->delete();
         return back()->with('success', 'Település törölve!');
     })->name('places.destroy');
+    Route::get('/counties/{county}/email-pdf', [CountyController::class, 'sendPdfEmail'])->name('counties.emailPdf');
 });
